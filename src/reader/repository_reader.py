@@ -24,6 +24,12 @@ class RepositoryReader:
                     'type': 'directory',
                     'children': self.get_dir_structure(item)
                 })
+            elif self.is_binary(item):
+                result.append({
+                    'name': item.name,
+                    'type': 'file',
+                    'content': ''
+                })
             else:
                 result.append({
                     'name': item.name,
@@ -31,3 +37,14 @@ class RepositoryReader:
                     'content': item.read_text()
                 })
         return result
+    
+    def is_binary(self, file_path):
+        try:
+            with open(file_path, 'rb') as file:
+                for block in iter(lambda: file.read(1024), b''):
+                    if b'\0' in block:
+                        return True
+        except Exception as e:
+            print(f"Error checking file {file_path}: {e}")
+            return False
+        return False
