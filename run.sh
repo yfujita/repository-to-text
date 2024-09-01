@@ -6,7 +6,6 @@ if [ -z "$REPO_PATH" ]; then
     exit 1
 fi
 
-docker rm repository-to-text:latest
 docker build -t repository-to-text:latest .
-docker run -v $REPO_PATH:/repo repository-to-text:latest
+docker run --rm -v $REPO_PATH:/repo repository-to-text:latest
 
