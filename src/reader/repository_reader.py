@@ -1,48 +1,126 @@
 from pathlib import Path
+from typing import List, Optional
+from pathspec import PathSpec
 
 class RepositoryReader:
+    """
+    - ルート直下から再帰的に走査
+    - .git は常に除外
+    - すべての .gitignore と .git/info/exclude を取り込み、gitwildmatch で判定
+      * ネガティブ(!)パターン / ** / 末尾スラッシュなどにも対応
+      * サブディレクトリの .gitignore は、その配置ディレクトリ基準として前置
+    """
     def __init__(self, repo_path: str) -> None:
-        self.repo_path = repo_path
+        self.root = Path(repo_path).resolve()
+        if not self.root.exists():
+            raise FileNotFoundError(f"repo_path not found: {self.root}")
+        self._spec: PathSpec = self._build_gitignore_spec()
 
-    def get_whole_structire(self) -> list:
-        root_path = Path(self.repo_path)
-        return self.get_dir_structure(root_path)
+    """
+    ルート直下から再帰的に走査し、辞書のリストで返す
+    """
+    def get_whole_structure(self) -> List[dict]:
+        return self._walk(self.root)
 
-    def get_dir_structure(self, dir_path: Path) -> list:
-        result: list = []
+    def _walk(self, dir_path: Path) -> List[dict]:
+        result: List[dict] = []
 
-        items = list(dir_path.iterdir())
+        try:
+            items = sorted(dir_path.iterdir())
+        except PermissionError:
+            return result
 
         for item in items:
+            # 常に .git を除外
+            if item.name == ".git":
+                continue
+            # .gitignore 判定で除外
+            if self._is_ignored(item):
+                # ディレクトリが無視対象なら中にも潜らない
+                continue
+
             if item.is_dir():
-                if item.name == '.git':
-                    # Skip .git directory
-                    continue
-                
                 result.append({
-                    'name': item.name,
-                    'type': 'directory',
-                    'children': self.get_dir_structure(item)
+                    "name": item.name,
+                    "type": "directory",
+                    "children": self._walk(item)
                 })
             elif self.is_binary(item):
                 result.append({
-                    'name': item.name,
-                    'type': 'file',
-                    'content': ''
+                    "name": item.name,
+                    "type": "file",
+                    "content": ""
                 })
             else:
+                try:
+                    content = item.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    content = ""
                 result.append({
-                    'name': item.name,
-                    'type': 'file',
-                    'content': item.read_text()
+                    "name": item.name,
+                    "type": "file",
+                    "content": content
                 })
         return result
-    
-    def is_binary(self, file_path):
+
+    def _is_ignored(self, path: Path) -> bool:
+        rel = path.relative_to(self.root).as_posix()
+        # ディレクトリは末尾スラッシュも試す
+        if path.is_dir() and self._spec.match_file(rel + "/"):
+            return True
+        return self._spec.match_file(rel)
+
+    def _build_gitignore_spec(self) -> PathSpec:
+        patterns: List[str] = []
+
+        # すべての .gitignore を集めて、その配置ディレクトリを前置
+        for gi in self.root.rglob(".gitignore"):
+            base = gi.parent.relative_to(self.root).as_posix()
+            try:
+                lines = gi.read_text(encoding="utf-8", errors="ignore").splitlines()
+            except Exception:
+                lines = []
+
+            for raw in lines:
+                s = raw.strip()
+                if not s or s.startswith("#"):
+                    continue
+                neg = s.startswith("!")
+                if neg:
+                    s = s[1:]
+
+                # 先頭の "/" はその .gitignore の置き場を基準にするので取り除く
+                s = s.lstrip("/")
+
+                # ルートからの相対に正規化
+                if base != ".":
+                    s = f"{base}/{s}"
+
+                if neg:
+                    s = "!" + s
+
+                patterns.append(s)
+
+        # .git/info/exclude も取り込む
+        info_exclude = self.root / ".git" / "info" / "exclude"
+        if info_exclude.exists():
+            try:
+                for raw in info_exclude.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    s = raw.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    patterns.append(s)
+            except Exception:
+                pass
+
+        # パターンが空でも空の spec を返す
+        return PathSpec.from_lines("gitwildmatch", patterns)
+
+    def is_binary(self, file_path: Path) -> bool:
         try:
-            with open(file_path, 'rb') as file:
-                for block in iter(lambda: file.read(1024), b''):
-                    if b'\0' in block:
+            with open(file_path, "rb") as f:
+                for block in iter(lambda: f.read(1024), b""):
+                    if b"\0" in block:
                         return True
         except Exception as e:
             print(f"Error checking file {file_path}: {e}")

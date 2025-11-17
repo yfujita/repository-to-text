@@ -8,7 +8,7 @@ def main():
         print('REPO_PATH is not set.', flush=True)
         exit(1)
     reader = RepositoryReader(repo_path)
-    whole_structure: list = reader.get_whole_structire()
+    whole_structure: list = reader.get_whole_structure()
 
     builder = ContentBuilder(whole_structure)
     prompt = get_prompt_text(builder)
