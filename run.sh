@@ -7,5 +7,5 @@ if [ -z "$REPO_PATH" ]; then
 fi
 
 docker build -t repository-to-text:latest .
-docker run --rm -v $REPO_PATH:/repo:ro repository-to-text:latest
+docker run --rm -v "$REPO_PATH":/repo:ro repository-to-text:latest
 

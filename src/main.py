@@ -1,29 +1,45 @@
+"""Main entry point for repository-to-text tool.
+
+This module reads a repository path from REPO_PATH environment variable,
+processes the repository structure and content, and outputs a formatted
+text representation suitable for AI prompts.
+"""
 import os
+import sys
 from reader.repository_reader import RepositoryReader
 from builder.content_builder import ContentBuilder
 
-def main():
+def main() -> None:
+    """Main entry point for the repository-to-text tool."""
     repo_path = os.getenv('REPO_PATH', '')
     if repo_path == '':
-        print('REPO_PATH is not set.', flush=True)
+        print('REPO_PATH is not set.', file=sys.stderr)
         exit(1)
     reader = RepositoryReader(repo_path)
     whole_structure: list = reader.get_whole_structure()
 
     builder = ContentBuilder(whole_structure)
-    prompt = get_prompt_text(builder)
+    prompt = build_repository_prompt(builder)
     print(prompt)
 
-def get_prompt_text(content_builder: ContentBuilder) -> str:
-    prompt = 'The following shows the file structure and code text of the project.\n\n'
-    prompt += '# Project Tree\n'
-    project_tree_text = content_builder.build_project_tree_text()
-    prompt += project_tree_text
-    prompt += '\n'
-    prompt += '# Code List\n'
-    code_list = content_builder.build_code_list()
-    prompt += code_list
-    return prompt
+def build_repository_prompt(content_builder: ContentBuilder) -> str:
+    """Build a complete prompt text from repository content.
+
+    Args:
+        content_builder: ContentBuilder instance with repository structure.
+
+    Returns:
+        Formatted prompt string containing project tree and code listings.
+    """
+    parts = [
+        'The following shows the file structure and code text of the project.\n\n',
+        '# Project Tree\n',
+        content_builder.build_project_tree_text(),
+        '\n',
+        '# Code List\n',
+        content_builder.build_code_list()
+    ]
+    return ''.join(parts)
 
 if __name__ == '__main__':
     main()

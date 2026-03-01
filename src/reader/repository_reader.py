@@ -1,6 +1,11 @@
+import sys
 from pathlib import Path
 from typing import List, Optional
 from pathspec import PathSpec
+
+# バイナリ判定の定数
+BINARY_CHECK_BLOCK_SIZE = 1024  # バイトサイズ
+BINARY_CHECK_MAX_BLOCKS = 8     # 最大チェックブロック数
 
 class RepositoryReader:
     """
@@ -54,7 +59,8 @@ class RepositoryReader:
             else:
                 try:
                     content = item.read_text(encoding="utf-8", errors="ignore")
-                except Exception:
+                except (IOError, OSError, UnicodeDecodeError) as e:
+                    print(f"Warning: Could not read {item}: {e}", file=sys.stderr)
                     content = ""
                 result.append({
                     "name": item.name,
@@ -78,7 +84,8 @@ class RepositoryReader:
             base = gi.parent.relative_to(self.root).as_posix()
             try:
                 lines = gi.read_text(encoding="utf-8", errors="ignore").splitlines()
-            except Exception:
+            except (IOError, OSError) as e:
+                print(f"Warning: Could not read .gitignore at {gi}: {e}", file=sys.stderr)
                 lines = []
 
             for raw in lines:
@@ -110,19 +117,30 @@ class RepositoryReader:
                     if not s or s.startswith("#"):
                         continue
                     patterns.append(s)
-            except Exception:
-                pass
+            except (IOError, OSError) as e:
+                print(f"Warning: Could not read .git/info/exclude: {e}", file=sys.stderr)
 
         # パターンが空でも空の spec を返す
         return PathSpec.from_lines("gitwildmatch", patterns)
 
     def is_binary(self, file_path: Path) -> bool:
+        """Check if a file is binary by reading limited blocks.
+
+        Args:
+            file_path: Path to the file to check
+
+        Returns:
+            True if file appears to be binary, False otherwise
+        """
         try:
-            with open(file_path, "rb") as f:
-                for block in iter(lambda: f.read(1024), b""):
+            with file_path.open("rb") as f:  # Pathlibの一貫性を保つ
+                for _ in range(BINARY_CHECK_MAX_BLOCKS):
+                    block = f.read(BINARY_CHECK_BLOCK_SIZE)
+                    if not block:
+                        break
                     if b"\0" in block:
                         return True
-        except Exception as e:
-            print(f"Error checking file {file_path}: {e}")
+        except (IOError, OSError) as e:
+            print(f"Error checking file {file_path}: {e}", file=sys.stderr, flush=True)
             return False
         return False
