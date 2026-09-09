@@ -15,10 +15,11 @@ class RepositoryReader:
       * ネガティブ(!)パターン / ** / 末尾スラッシュなどにも対応
       * サブディレクトリの .gitignore は、その配置ディレクトリ基準として前置
     """
-    def __init__(self, repo_path: str) -> None:
+    def __init__(self, repo_path: str, ignore_dirs: Optional[List[str]] = None) -> None:
         self.root = Path(repo_path).resolve()
         if not self.root.exists():
             raise FileNotFoundError(f"repo_path not found: {self.root}")
+        self.ignore_dirs = ignore_dirs or []
         self._spec: PathSpec = self._build_gitignore_spec()
 
     """
@@ -119,6 +120,9 @@ class RepositoryReader:
                     patterns.append(s)
             except (IOError, OSError) as e:
                 print(f"Warning: Could not read .git/info/exclude: {e}", file=sys.stderr)
+
+        # 実行時に追加指定された除外ディレクトリを取り込む
+        patterns.extend(self.ignore_dirs)
 
         # パターンが空でも空の spec を返す
         return PathSpec.from_lines("gitwildmatch", patterns)

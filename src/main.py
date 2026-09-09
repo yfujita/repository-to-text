@@ -15,7 +15,8 @@ def main() -> None:
     if repo_path == '':
         print('REPO_PATH is not set.', file=sys.stderr)
         exit(1)
-    reader = RepositoryReader(repo_path)
+    ignore_dirs = [d for d in os.getenv('IGNORE_DIRS', '').split(',') if d]
+    reader = RepositoryReader(repo_path, ignore_dirs=ignore_dirs)
     whole_structure: list = reader.get_whole_structure()
 
     builder = ContentBuilder(whole_structure)

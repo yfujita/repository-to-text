@@ -16,11 +16,18 @@
 bash run.sh /path/to/repository > out.txt
 ```
 
+`.gitignore` に加えて除外したいディレクトリ・ファイルがある場合は、第2引数以降に指定する（gitignore と同じパターン形式）。
+
+```bash
+bash run.sh /path/to/repository node_modules dist "*.log" > out.txt
+```
+
 ### ローカル実行
 
 ```bash
 pip install -r requirements.txt
 export REPO_PATH=/path/to/repository
+export IGNORE_DIRS="node_modules,dist"  # 任意
 python src/main.py > out.txt
 ```
 
